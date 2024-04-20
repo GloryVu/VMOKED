@@ -7,7 +7,7 @@ archive/
 *.so
 /STCNet
 /CNNLSTM
-/YOLOv9
+/yolov9
 # Distribution / packaging
 .Python
 build/

@@ -7,6 +7,7 @@ archive/
 *.so
 /STCNet
 /CNNLSTM
+**/checkpoints
 /yolov9
 /dataset/wildfire_smoke_dataset/
 /vsmoked/models/sky_ground_segmentation/

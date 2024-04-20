@@ -8,6 +8,10 @@ archive/
 /STCNet
 /CNNLSTM
 /yolov9
+/dataset/wildfire_smoke_dataset/
+/vsmoked/models/sky_ground_segmentation/
+**/**.pth
+**/**.trt
 # Distribution / packaging
 .Python
 build/

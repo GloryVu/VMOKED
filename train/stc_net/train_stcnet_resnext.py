@@ -1,5 +1,5 @@
-from STCNet.src.STCNet_mobilenetv2.stcnet import STCNet
-from dataset import STCNetDataset
+from STCNet.src.STCNet_se_resnext.stcnet import STCNet
+from dataset.dataset import STCNetDataset
 import torch
 from tqdm import tqdm
 from torch import nn
@@ -16,32 +16,12 @@ model = STCNet().to(device)
 random_transform=model.get_augmentation()
 hard_transform =transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize(model.input_mean, model.input_std)])
-dataset = STCNetDataset(r"data/dataset_v1/train",random_transform,hard_transform, 8, alpha=10)
-# test_set = SmokeDataset(r"data/dataset/test",15)
-batch_size = 4
-validation_split = .2
+tran_set = STCNetDataset(r"dataset/wildfire_smoke_dataset/classification/train",random_transform,hard_transform, 8, alpha=10)
+test_set = STCNetDataset(r"dataset/wildfire_smoke_dataset/classification/test",None,hard_transform,8)
+batch_size = 2
 random_seed= 42
-
-# Creating data indices for training and validation splits:
-dataset_size = len(dataset)
-indices = list(range(dataset_size))
-split = int(np.floor(validation_split * dataset_size))
-np.random.seed(random_seed)
-np.random.shuffle(indices)
-train_indices, val_indices = indices[split:], indices[:split]
-
-# Creating PT data samplers and loaders:
-train_sampler = SubsetRandomSampler(train_indices)
-valid_sampler = SubsetRandomSampler(val_indices)
-
-train_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, 
-                                           sampler=train_sampler)
-valid_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-                                                sampler=valid_sampler)
-# train_loader = DataLoader(dataset=train_set, batch_size=64, pin_memory=True, shuffle=True)
-# valid_loader = DataLoader(dataset=valid_set, batch_size=64, pin_memory=True, shuffle=True)
-
-
+train_loader = DataLoader(dataset=tran_set, batch_size=batch_size, pin_memory=True, shuffle=True)
+valid_loader = DataLoader(dataset=test_set, batch_size=batch_size, pin_memory=True, shuffle=True)
 
 criterion = nn.CrossEntropyLoss()
 optimizer_policies = model.get_optim_policies()
@@ -55,7 +35,7 @@ num_epochs = 20
 best_val_acc = 0
 
 for epoch in range(num_epochs):
-    if epoch % 5 == 0:
+    if epoch % 1 == 0:
         loop = tqdm(train_loader, total=len(train_loader) + len(valid_loader), position=0, leave=False)
     else:
         loop = tqdm(train_loader, total=len(train_loader), position=0, leave=False)
@@ -75,9 +55,8 @@ for epoch in range(num_epochs):
 
         loop.set_postfix(train_loss=loss.item())
         loop.update(1)
-        sleep(0.1)
 
-    if epoch % 5 == 0:
+    if epoch % 1 == 0:
         num_correct = 0
         num_samples = 0
         model.eval()
@@ -99,9 +78,8 @@ for epoch in range(num_epochs):
 
                 if val_acc > best_val_acc:
                     best_val_acc = val_acc
-                    torch.save(model.state_dict(), "model/STCNet/save/STCMobilenetv2_model_best.pth")
+                    torch.save(model.state_dict(), "STCNet/save/STCNet_se_resnext_model_best.pth")
 
                 loop.set_postfix(val_accuracy=val_acc)
                 loop.update(1)
-
         model.train()

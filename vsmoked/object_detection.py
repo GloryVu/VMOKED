@@ -167,6 +167,7 @@ class Detector:
                 detection[i][6] = mm
                 if mm <self.curbbox_motion_threshold:
                     detection[i] = [0.0]*8
+                    print('motionless mm')
                     continue
                 # check previous detection
                 input_motion_box = [frames[-1][box[1]:box[3],box[0]:box[2],:].copy()]
@@ -190,6 +191,7 @@ class Detector:
                 
                 if(mmb<self.bboxes_motion_threshold):
                     detection[i] = [0.0]*8
+                    print('motionless mmb')
                     continue
                 
                 detection[i][7] = mmb
@@ -242,7 +244,7 @@ class Detector:
             # logger.info(f'motion_measure_box : {mmb} {detector_config.model.self.bboxes_motion_threshold}')
             
             if(mmb<self.bboxes_motion_threshold):
-                # detection[i] = [0.0]*8
+                detection[i] = [0.0]*8
                 continue
             
             detection[i][7] = mmb

@@ -102,7 +102,7 @@ def on_sky(box,mask,threshold=0.8):
 class Detector:
     def __init__(self,detector_path,segmetnor_path,windowsize = 7, step = 3, 
                  preset_similarity= 0.9, curbbox_motion_threshold = 0.02,
-                 bboxes_motion_threshold = 0.02) -> None:
+                 bboxes_motion_threshold = 0.02, use_SGS_block=True) -> None:
         self.detector = TensorRtDetector(detector_path)
         self.segmentor = TensorRtSegmentor(segmetnor_path)
         self.windowsize = windowsize
@@ -110,7 +110,8 @@ class Detector:
         self.preset_similarity =preset_similarity
         self.curbbox_motion_threshold = curbbox_motion_threshold
         self.bboxes_motion_threshold= bboxes_motion_threshold
-    
+        self.use_SGS_block=use_SGS_block
+
     def set_params(self,windowsize, step, preset_similarity, curbbox_motion_threshold,
                         bboxes_motion_threshold):
         self.windowsize = windowsize
@@ -149,9 +150,10 @@ class Detector:
                 # image = cv2.resize(image,[320,320])
                 total_time+= time.time()- start
                 # this also cached
-                if on_sky(box, self.segmentor.detect_raw(np.expand_dims(np.transpose(image, (2, 0, 1)),0))):
-                    detection[i] = [0.0]*8
-                    continue
+                if self.use_SGS_block:
+                    if on_sky(box, self.segmentor.detect_raw(np.expand_dims(np.transpose(image, (2, 0, 1)),0))):
+                        detection[i] = [0.0]*8
+                        continue
                 start = time.time()
                 input_motion = [a[box[1]:box[3],box[0]:box[2],:].copy() for a in frames[::self.step]]
                 # logger.info(f'{input_motion}')

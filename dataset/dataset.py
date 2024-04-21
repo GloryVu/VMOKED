@@ -152,8 +152,8 @@ class SmokeDetectionDataset(Dataset):
    
     def _load_boxes(self,image_path):
         image_name = os.path.basename(image_path)
-        
-        with open(os.path.join(self.label_dir,image_name.replace('.jpg','.txt'))) as xml_file:
+        video_name = image_path.split('/')[-2]
+        with open(os.path.join(self.label_dir,video_name+'_'+image_name.replace('.jpg','.txt'))) as xml_file:
             boxes =[]
             for label in [label for label in xml_file.read().split('\n') if len(label) !=0]:
                 x,y,w,h = [float(num) for num in label.split()[1:]]

@@ -21,7 +21,7 @@ test_set = STCNetDataset(r"dataset/wildfire_smoke_dataset/classification/test",N
 batch_size = 4
 random_seed= 42
 train_loader = DataLoader(dataset=tran_set, batch_size=batch_size, pin_memory=True, shuffle=True)
-valid_loader = DataLoader(dataset=test_set, batch_size=batch_size, pin_memory=True, shuffle=True)
+valid_loader = DataLoader(dataset=test_set, batch_size=1, pin_memory=True, shuffle=True)
 
 
 
@@ -74,7 +74,7 @@ for epoch in range(num_epochs):
                 num_correct += (pred_idx == y).sum().item()
                 num_samples += y.size(0)
 
-                val_acc = round(num_correct / num_samples, 3)
+                val_acc = round(num_correct / num_samples, 4)
 
                 if val_acc > best_val_acc:
                     best_val_acc = val_acc

@@ -43,8 +43,6 @@ with torch.no_grad():
         
         end_time= time.time()
         pred_idx = torch.argmax(pred, dim=1)
-        if pred_idx!=y:
-            print(image_paths[-1][0])
         tp +=  torch.sum((pred_idx==torch.ones_like(pred_idx)) and (y == torch.ones_like(y)))
         tn += torch.sum((pred_idx==torch.zeros_like(pred_idx)) and (y == torch.zeros_like(y)))
         fp += torch.sum((pred_idx==torch.ones_like(pred_idx)) and (y == torch.zeros_like(y)))
@@ -60,7 +58,7 @@ with torch.no_grad():
         val_acc = round(num_correct / num_samples, 4)
         latency_time = end_time - start_time
         latency+=latency_time
-        loop.set_postfix(precision=f'{precision:.4f}', recall=f'{recall:.4f}', f1=f'{f1:.4f}')
+        loop.set_postfix(precision=f'{precision:.4f}', recall=f'{recall:.4f}', f1=f'{f1:.4f}',val_acc=f'{val_acc:.4f}')
         loop.update(1)
     print(f'accuracy: {round(num_correct / num_samples, 4)}')
     print(f'average latency: {latency*1000 / num_samples:.2f}')

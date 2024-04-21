@@ -13,6 +13,7 @@ archive/
 /vsmoked/models/sky_ground_segmentation/
 **/**.pth
 **/**.trt
+**/**.onnx
 # Distribution / packaging
 .Python
 build/

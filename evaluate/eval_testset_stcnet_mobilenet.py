@@ -13,11 +13,11 @@ import time
 warnings.filterwarnings("ignore")
 
 device = ("cuda" if torch.cuda.is_available() else "cpu")
-model = STCNet().to(device)
+model = STCNet(dropout=0.0).to(device)
 hard_transform =transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize(model.input_mean, model.input_std)])
 dataset = STCNetDataset(r"dataset/wildfire_smoke_dataset/classification/test",None,hard_transform, 8, alpha=10)
-batch_size = 1
+batch_size = 4
 
 # train_loader = DataLoader(dataset=train_set, batch_size=64, pin_memory=True, shuffle=True)
 test_loader = DataLoader(dataset=dataset, batch_size=1, pin_memory=True, shuffle=True)

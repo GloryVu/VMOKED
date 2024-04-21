@@ -217,7 +217,7 @@ class TensorRtDetector:
         for i in range(num_dets):
             if i == 20:
                 break
-            if float(det_scores[i]) < 0.4:
+            if float(det_scores[i]) < 0.1:
                 continue
             detections[i] = [
                 det_classes[i],

@@ -1,5 +1,5 @@
-from model.STCNet.src.STCNet_mobilenetv2.stcnet import STCNet
-from dataset import STCNetDataset
+from STCNet.src.STCNet_mobilenetv2.stcnet import STCNet
+from dataset.dataset import STCNetDataset
 import torch
 from tqdm import tqdm
 from torch import nn
@@ -16,14 +16,14 @@ device = ("cuda" if torch.cuda.is_available() else "cpu")
 model = STCNet().to(device)
 hard_transform =transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize(model.input_mean, model.input_std)])
-dataset = STCNetDataset(r"data/dataset_v1/test",None,hard_transform, 8, alpha=10)
+dataset = STCNetDataset(r"dataset/wildfire_smoke_dataset/classification/test",None,hard_transform, 8, alpha=10)
 batch_size = 1
 
 # train_loader = DataLoader(dataset=train_set, batch_size=64, pin_memory=True, shuffle=True)
 test_loader = DataLoader(dataset=dataset, batch_size=1, pin_memory=True, shuffle=True)
 
 
-model.load_state_dict(torch.load("./model/STCNet/save/STCMobilenetv2_model_best.pth"))
+model.load_state_dict(torch.load("./STCNet/save/STCMobilenetv2_model_best.pth"))
 model.eval()
 epsilon = 0.0000001
 with torch.no_grad():
@@ -46,10 +46,12 @@ with torch.no_grad():
         print(pred_idx)
         num_correct += (pred_idx == y).sum().item()
         num_samples += y.size(0)
-        tp +=  torch.sum((pred_idx==torch.zeros_like(pred_idx)) and (y == torch.zeros_like(y)))
-        tn += torch.sum((pred_idx==torch.ones_like(pred_idx)) and (y == torch.ones_like(y)))
-        fp += torch.sum((pred_idx==torch.zeros_like(pred_idx)) and (y == torch.ones_like(y)))
-        fn += torch.sum((pred_idx==torch.ones_like(pred_idx)) and (y == torch.zeros_like(y)))
+         # 0: nonsmoke
+        # 1: smoke
+        tp +=  torch.sum((pred_idx==torch.ones_like(pred_idx)) and (y == torch.ones_like(y)))
+        tn += torch.sum((pred_idx==torch.zeros_like(pred_idx)) and (y == torch.zeros_like(y)))
+        fp += torch.sum((pred_idx==torch.ones_like(pred_idx)) and (y == torch.zeros_like(y)))
+        fn += torch.sum((pred_idx==torch.zeros_like(pred_idx)) and (y == torch.ones_like(y)))
         precision = tp/(tp+fp+epsilon)
         recall = tp/(tp+fn+epsilon)
         f1 = 2*precision*recall/(precision+recall+epsilon)

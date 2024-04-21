@@ -1,5 +1,5 @@
 from STCNet.src.STCNet_mobilenetv2.stcnet import STCNet
-from dataset import STCNetDataset
+from dataset.dataset import STCNetDataset
 import torch
 from tqdm import tqdm
 from torch import nn
@@ -17,7 +17,7 @@ random_transform=model.get_augmentation()
 hard_transform =transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize(model.input_mean, model.input_std)])
 tran_set = STCNetDataset(r"dataset/wildfire_smoke_dataset/classification/train",random_transform,hard_transform, 8, alpha=10)
-test_set = STCNetDataset(r"dataset/wildfire_smoke_dataset/classification/test",None,hard_transform,8)
+test_set = STCNetDataset(r"dataset/wildfire_smoke_dataset/classification/test",None,hard_transform,8,alpha=10)
 batch_size = 4
 random_seed= 42
 train_loader = DataLoader(dataset=tran_set, batch_size=batch_size, pin_memory=True, shuffle=True)
@@ -78,7 +78,7 @@ for epoch in range(num_epochs):
 
                 if val_acc > best_val_acc:
                     best_val_acc = val_acc
-                    torch.save(model.state_dict(), "/STCNet/save/STCMobilenetv2_model_best.pth")
+                    torch.save(model.state_dict(), "STCNet/save/STCMobilenetv2_model_best.pth")
 
                 loop.set_postfix(val_accuracy=val_acc)
                 loop.update(1)

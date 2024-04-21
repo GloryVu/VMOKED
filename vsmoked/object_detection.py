@@ -100,11 +100,11 @@ def on_sky(box,mask,threshold=0.8):
     # frame_queue =[]
     # output_queue =[]
 class Detector:
-    def __init__(self,detector_path,segmetnor_path,windowsize = 7, step = 3, 
+    def __init__(self,detector_path,segmentor_path,windowsize = 7, step = 3, 
                  preset_similarity= 0.9, curbbox_motion_threshold = 0.02,
                  bboxes_motion_threshold = 0.02, use_SGS_block=True) -> None:
         self.detector = TensorRtDetector(detector_path)
-        self.segmentor = TensorRtSegmentor(segmetnor_path)
+        self.segmentor = TensorRtSegmentor(segmentor_path)
         self.windowsize = windowsize
         self.step = step
         self.preset_similarity =preset_similarity
@@ -118,8 +118,8 @@ class Detector:
         self.step = step
         self.preset_similarity=preset_similarity
         self.curbbox_motion_threshold = curbbox_motion_threshold
-        self.bbox_motion_resize_h = bboxes_motion_threshold
-    def detect(self,frames, conf=0.4):
+        self.bboxes_motion_threshold = bboxes_motion_threshold
+    def detect(self, frames, conf=0.4):
         
         input_frame = frames[-1]
         
@@ -189,7 +189,7 @@ class Detector:
                 # logger.info(f'motion_measure_box : {mmb} {detector_config.model.self.bboxes_motion_threshold}')
                 
                 if(mmb<self.bboxes_motion_threshold):
-                    # detection[i] = [0.0]*8
+                    detection[i] = [0.0]*8
                     continue
                 
                 detection[i][7] = mmb

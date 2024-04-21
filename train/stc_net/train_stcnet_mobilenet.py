@@ -76,11 +76,11 @@ for epoch in range(num_epochs):
 
                 val_acc = round(num_correct / num_samples, 4)
 
-                if val_acc > best_val_acc:
-                    best_val_acc = val_acc
-                    torch.save(model.state_dict(), "STCNet/save/STCMobilenetv2_model_best.pth")
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                torch.save(model.state_dict(), "STCNet/save/STCMobilenetv2_model_best.pth")
 
-                loop.set_postfix(val_accuracy=val_acc)
-                loop.update(1)
+            loop.set_postfix(val_accuracy=val_acc)
+            loop.update(1)
 
         model.train()

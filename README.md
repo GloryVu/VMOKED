@@ -1,6 +1,9 @@
 VSMOKED: Video Smoke Multiple Objects Kinetic Emission Detection
 
 The source code will availability soon.
+## Dataset
+[WSDataset]()
+## Training
 ### To train stcnet
 1. clone stcnet repo
 
@@ -24,3 +27,4 @@ for stcnet resnet
 2. run
 
 `python train/cnnlstm/train_cnnlstm.py`
+## Evaluate

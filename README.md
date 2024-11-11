@@ -7,7 +7,7 @@ The source code will availability soon.
 ### To train stcnet
 1. clone stcnet repo
 
-`git clone https://github.com/cuongphamduc/CNNLSTM.git`
+`git clone https://github.com/Caoyichao/STCNet.git`
 
 2. run
 

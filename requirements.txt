@@ -1,0 +1,8 @@
+pillow==11.0.0
+numpy==1.23.0
+torch==2.5.1
+torchvision==0.20.1
+opencv-python==4.10.0.84
+matplotlib==3.9.3
+requests==2.32.3
+super-gradients==3.7.1

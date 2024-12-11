@@ -98,4 +98,5 @@ if __name__ == '__main__':
     save_dir = sys.argv[2]
     num_epoch = sys.argv[3]
     batch_size = sys.argv[4]
+    print(sys.argv)
     train_cnnlstm(data_dir,save_dir,num_epoch,batch_size)

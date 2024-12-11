@@ -1,3 +1,6 @@
+albumentations==1.4.22
+sgmllib3k==1.0.0
+xmltodict==0.14.2
 transforms==0.2.1
 pillow==11.0.0
 numpy==1.23.0
@@ -9,6 +12,3 @@ requests==2.32.3
 super-gradients==3.7.1
 segmentation-models-pytorch==0.3.4
 # require: pip install -U git+https://github.com/qubvel/segmentation_models.pytorch
-albumentations==1.4.22
-sgmllib3k==1.0.0
-xmltodict==0.14.2

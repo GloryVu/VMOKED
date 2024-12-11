@@ -1,5 +1,7 @@
 from CNNLSTM.model import CNNLSTM
+# from STCNet.src.
 from STCNet.src.STCNet_mobilenetv2.stcnet import STCNet
+# from STCNet.src.STCNet_se_resnext.stcnet import STCNet
 from dataset.dataset import SmokeDataset
 import torch
 from tqdm import tqdm
@@ -12,13 +14,13 @@ import numpy as np
 from torch.utils.data.sampler import SubsetRandomSampler
 warnings.filterwarnings("ignore")
 
-device = ("cuda" if torch.cuda.is_available() else "cpu")
+device =  ("cuda" if torch.cuda.is_available() else "cpu")
 model = STCNet()
 random_transform=model.get_augmentation()
 hard_transform=transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-train_set = SmokeDataset(r"dataset/wildfire_smoke_dataset/classification/train",random_transform,hard_transform,15)
-test_set = SmokeDataset(r"dataset/wildfire_smoke_dataset/classification/test",None,hard_transform,15)
+train_set = SmokeDataset(r"dataset/demo/classification/train",random_transform,hard_transform,15)
+test_set = SmokeDataset(r"dataset/demo/classification/test",None,hard_transform,15)
 batch_size = 64
 
 train_loader = DataLoader(dataset=train_set, batch_size=64, pin_memory=True, shuffle=True)

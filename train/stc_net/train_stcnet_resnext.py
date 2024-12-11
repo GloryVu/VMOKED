@@ -11,13 +11,13 @@ import numpy as np
 from torch.utils.data.sampler import SubsetRandomSampler
 warnings.filterwarnings("ignore")
 
-device = ("cuda" if torch.cuda.is_available() else "cpu")
+device =  ("cuda" if torch.cuda.is_available() else "cpu")
 model = STCNet().to(device)
 random_transform=model.get_augmentation()
 hard_transform =transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize(model.input_mean, model.input_std)])
-tran_set = STCNetDataset(r"dataset/wildfire_smoke_dataset/classification/train",random_transform,hard_transform, 8, alpha=10)
-test_set = STCNetDataset(r"dataset/wildfire_smoke_dataset/classification/test",None,hard_transform,8,alpha=10)
+tran_set = STCNetDataset(r"dataset/demo/classification/train",random_transform,hard_transform, 8, alpha=10)
+test_set = STCNetDataset(r"dataset/demo/classification/test",None,hard_transform,8,alpha=10)
 batch_size = 2
 random_seed= 42
 train_loader = DataLoader(dataset=tran_set, batch_size=batch_size, pin_memory=True, shuffle=True)

@@ -1,17 +1,20 @@
-from CNNLSTM.model import CNNLSTM
-# from STCNet.src.
-from STCNet.src.STCNet_mobilenetv2.stcnet import STCNet
-# from STCNet.src.STCNet_se_resnext.stcnet import STCNet
-from dataset.dataset import SmokeDataset
+import warnings
+from time import sleep
+
 import torch
-from tqdm import tqdm
 from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from time import sleep
-import warnings
-import numpy as np
-from torch.utils.data.sampler import SubsetRandomSampler
+from tqdm import tqdm
+
+from CNNLSTM.model import CNNLSTM
+
+# from STCNet.src.STCNet_se_resnext.stcnet import STCNet
+from dataset.dataset import SmokeDataset
+
+# from STCNet.src.
+from STCNet.src.STCNet_mobilenetv2.stcnet import STCNet
+
 warnings.filterwarnings("ignore")
 
 device =  ("cuda" if torch.cuda.is_available() else "cpu")
@@ -33,7 +36,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.0003)
 
 model.train()
 
-num_epochs = 30
+num_epochs = 1
 
 best_val_acc = 0
 

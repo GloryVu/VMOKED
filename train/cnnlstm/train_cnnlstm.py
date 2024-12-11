@@ -96,7 +96,7 @@ def train_cnnlstm(data_dir="dataset/demo/classification", save_dir = "CNNLSTM/sa
 if __name__ == '__main__':
     data_dir = sys.argv[1]
     save_dir = sys.argv[2]
-    num_epoch = sys.argv[3]
-    batch_size = sys.argv[4]
+    num_epoch = int(sys.argv[3])
+    batch_size = int(sys.argv[4])
     print(sys.argv)
     train_cnnlstm(data_dir,save_dir,num_epoch,batch_size)

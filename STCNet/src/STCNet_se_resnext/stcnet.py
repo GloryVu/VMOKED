@@ -1,12 +1,14 @@
-from torch import nn
-import torch.nn.functional as TNF
-import torch
-from transforms import *
-import torch.nn.init as init
-from torch.nn.init import normal_, constant_
-from STCNet.src.STCNet_se_resnext import senet
-from STCNet.src.STCNet_se_resnext import senet_branch
 import ssl
+
+import torch
+import torch.nn.functional as TNF
+import torch.nn.init as init
+from torch import nn
+from torch.nn.init import constant_, normal_
+from transforms import *
+
+from STCNet.src.STCNet_se_resnext import senet
+
 ssl._create_default_https_context = ssl._create_unverified_context
 
 BN_MOMENTUM = 0.1
@@ -291,15 +293,21 @@ class STCNet(nn.Module):
     def get_augmentation(self):
         #return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .875, .75, .66]),
         #                                           GroupRandomHorizontalFlip()])
+        from torchvision.transforms import (
+            ColorJitter,
+            Compose,
+            RandomHorizontalFlip,
+            RandomPerspective,
+            RandomResizedCrop,
+        )
         rrc = RandomResizedCrop(size=224, scale=(0.9, 1), ratio=(3./4., 4./3.))
-        rp = RandomPerspective(anglex=3, angley=3, anglez=3, shear=3)
-        # Improve generalization
+        rp = RandomPerspective()
+        # # Improve generalization
         rhf = RandomHorizontalFlip(p=0.5)
-        # Deal with dirts, ants, or spiders on the camera lense
-        re = RandomErasing(p=0.5, scale=(0.003, 0.01), ratio=(0.3, 3.3), value=0)
-        cj = ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=(-0.1, 0.1), gamma=0.3)
+        # # Deal with dirts, ants, or spiders on the camera lense
+        cj = ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=(-0.1, 0.1))
 
-        return torchvision.transforms.Compose([cj, rrc, rp, rhf])
+        return Compose([cj, rrc, rp, rhf])
         #return torchvision.transforms.Compose([GroupMultiScaleCrop(self.input_size, [1, .9,]),
         #                                           GroupRandomHorizontalFlip()])
 

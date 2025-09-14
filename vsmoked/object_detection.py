@@ -1,6 +1,9 @@
 import cv2
-from .detector import TensorRtDetector
-from .segmentor import TensorRtSegmentor
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from detector import TensorRtDetector
+from segmentor import TensorRtSegmentor
 import numpy as np
 import time
 width = 640
@@ -103,8 +106,9 @@ class Detector:
     def __init__(self,detector_path,segmentor_path,windowsize = 7, step = 3, 
                  preset_similarity= 0.9, curbbox_motion_threshold = 0.02,
                  bboxes_motion_threshold = 0.02, use_SGS_block=True) -> None:
-        self.detector = TensorRtDetector(detector_path)
         self.segmentor = TensorRtSegmentor(segmentor_path)
+
+        self.detector = TensorRtDetector(detector_path)
         self.windowsize = windowsize
         self.step = step
         self.preset_similarity =preset_similarity
@@ -255,3 +259,11 @@ class Detector:
                      "mmb":det[7]
                      } for det in detection if sum(det) != 0]
         return detection
+    
+if __name__ == "__main__":
+    detector = Detector("/home/iec/forestfire/VSMOKED/vsmoked/weight/best_ds_nms.trt", 
+                        "/home/iec/forestfire/VSMOKED/vsmoked/weight/sky_ground_320x320.onnx")
+    frames = [cv2.imread("/home/iec/forestfire/VSMOKED/dataset/demo/classification/test/smoke/smoke_03/frame_52.jpg")]
+    # Resize frame to 640x640 before detection
+    frames = [cv2.resize(frame, (640, 640)) for frame in frames]
+    detector.detect(frames)

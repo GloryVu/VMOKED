@@ -4,33 +4,20 @@ import time
 import logging
 import argparse
 import tensorrt as trt
-# import pycuda.driver as cuda
-# import pycuda.autoinit
 import numpy as np
 from cuda import cudart
 import ctypes
 from typing import Optional, List, Tuple
-# from skimage import io
 import cv2
-# from skimage.transform import resize
-import logging
-# import torchvision
-# import torch
-import ctypes
-import numpy as np
 
 try:
     import experiments.model.OurModel.detector as trt
     from cuda import cuda
-
     TRT_SUPPORT = True
 except ModuleNotFoundError as e:
     TRT_SUPPORT = False
 
-# from frigate.detectors.detection_api import DetectionApi
-# from frigate.detectors.detector_config import BaseDetectorConfig
 from typing import Literal
-# from pydantic import Field
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +88,6 @@ class HostDeviceMem:
         cuda_call(cudart.cudaFree(self.device))
         cuda_call(cudart.cudaFreeHost(self.host.ctypes.data))
 
-# class TensorRTSegmentorConfig(BaseDetectorConfig):
-#     type: Literal[DETECTOR_KEY]
-#     device: int = Field(default=0, title="GPU Device Index")
-
 
 class TensorRtSegmentor:
     type_key = DETECTOR_KEY
@@ -114,20 +97,45 @@ class TensorRtSegmentor:
     def __init__(self, detector):
         trt.init_libnvinfer_plugins(None, "")
         trt_path = detector
-        # print(trt_path)
-        print(trt_path.replace('.trt','.onnx'))
-        if (not os.path.exists(trt_path)):
-            self.engine = self.build_engine_from_onnx(trt_path.replace('.trt','.onnx'),fp16=True)
-            with open(trt_path, "wb") as fw:
-                fw.write(self.engine.serialize())
-            print("saved engine to ", trt_path)
+        onnx_path = trt_path.replace('.trt', '.onnx')
+        self.engine = None
+
+        # Always build engine from ONNX if .trt is missing or invalid
+        need_build = False
+        if not os.path.exists(trt_path):
+            logger.warning(f"TensorRT engine file {trt_path} does not exist. Will build from ONNX.")
+            need_build = True
         else:
-            print("reading ", trt_path)
-            with open(trt_path, "rb") as f, trt.Runtime(self.trt_logger) as runtime:
-                self.engine = runtime.deserialize_cuda_engine(f.read())
+            # Try to load the engine, catch deserialization errors
+            try:
+                logger.info(f"Reading TensorRT engine from {trt_path}")
+                with open(trt_path, "rb") as f, trt.Runtime(self.trt_logger) as runtime:
+                    self.engine = runtime.deserialize_cuda_engine(f.read())
+                if self.engine is None:
+                    logger.error(f"Deserialized engine is None. Will rebuild from ONNX.")
+                    need_build = True
+            except Exception as e:
+                logger.error(f"Failed to load TensorRT engine from {trt_path}: {e}")
+                need_build = True
+
+        if need_build:
+            logger.info(f"Building TensorRT engine from ONNX: {onnx_path}")
+            self.engine = self.build_engine_from_onnx(onnx_path, fp16=True)
+            if self.engine is not None:
+                try:
+                    with open(trt_path, "wb") as fw:
+                        fw.write(self.engine.serialize())
+                    logger.info(f"Saved engine to {trt_path}")
+                except Exception as e:
+                    logger.error(f"Failed to save engine to {trt_path}: {e}")
+            else:
+                raise RuntimeError(f"Failed to build TensorRT engine from ONNX: {onnx_path}")
+
+        if self.engine is None:
+            raise RuntimeError(f"TensorRT engine could not be loaded or built for {trt_path}")
+
         self.context = self.engine.create_execution_context()
         self.inputs, self.outputs, self.bindings, self.stream = self.allocate_buffers(self.engine)
-
 
     # Allocates all buffers required for an engine, i.e. host/device inputs/outputs.
     # If engine uses dynamic shapes, specify a profile to find the maximum input & output size.
@@ -136,7 +144,7 @@ class TensorRtSegmentor:
         outputs = []
         bindings = []
         stream = cuda_call(cudart.cudaStreamCreate())
-        tensor_names = [str(i) for i in self.engine]
+        tensor_names = [str(i) for i in engine]
         for binding in tensor_names:
             # get_tensor_profile_shape returns (min_shape, optimal_shape, max_shape)
             # Pick out the max shape to allocate enough memory for the binding.
@@ -158,13 +166,11 @@ class TensorRtSegmentor:
             bindings.append(int(bindingMemory.device))
 
             # Append to the appropriate list.
-            
             if engine.binding_is_input(binding):
                 inputs.append(bindingMemory)
             else:
                 outputs.append(bindingMemory)
         return inputs, outputs, bindings, stream
-
 
     def build_engine_from_onnx(self, onnx_file_path, fp16=False):
         EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
@@ -175,24 +181,29 @@ class TensorRtSegmentor:
              trt.Runtime(self.trt_logger) as runtime:
             config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 2 << 30)  # 2Gb
             if fp16:
-                print("setting fp16 flag")
+                logger.info("Setting FP16 flag for TensorRT engine build")
                 config.set_flag(trt.BuilderFlag.FP16)
             # Parse model file
-            assert os.path.exists(onnx_file_path), f'cannot find {onnx_file_path}'
+            if not os.path.exists(onnx_file_path):
+                logger.error(f"Cannot find ONNX file: {onnx_file_path}")
+                return None
             with open(onnx_file_path, 'rb') as fr:
                 if not parser.parse(fr.read()):
-                    print('ERROR: Failed to parse the ONNX file.')
+                    logger.error('ERROR: Failed to parse the ONNX file.')
                     for error in range(parser.num_errors):
-                        print (parser.get_error(error))
-                    assert False
+                        logger.error(parser.get_error(error))
+                    return None
             plan = builder.build_serialized_network(network, config)
+            if plan is None:
+                logger.error("Failed to build serialized network from ONNX.")
+                return None
             engine = runtime.deserialize_cuda_engine(plan)
+            if engine is None:
+                logger.error("Failed to deserialize CUDA engine from plan.")
             return engine
-
 
     def infer(self, image):
         self.inputs[0].host = image
-        # print(self.inputs[0].host)
         # Transfer input data to the GPU.
         host2device = cudart.cudaMemcpyKind.cudaMemcpyHostToDevice
         [cuda_call(cudart.cudaMemcpyAsync(inp.device, inp.host, inp.nbytes, host2device, self.stream)) for inp in self.inputs]
@@ -207,18 +218,43 @@ class TensorRtSegmentor:
         return [out.host for out in self.outputs]
 
     def detect_raw(self, tensor_input):
-        image_array = np.array(tensor_input/255).astype(np.float32)
-        input = self._scale_image(image_array = image_array,mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        # input.ctypes.data_as(ctypes.POINTER(ctypes.c_int16))
-        trt_outputs = self.infer(image=input)
-        # print(trt_outputs)
-        mask = trt_outputs[0]
+        # tensor_input is expected to be (1, 3, H, W)
+        # Remove batch dimension if present
+        if tensor_input.ndim == 4 and tensor_input.shape[0] == 1:
+            image_array = tensor_input[0]
+        else:
+            image_array = tensor_input
 
-        mask = np.reshape(mask,(tensor_input.shape[2],tensor_input.shape[3])).round()
-        # mask_img = mask*255
-        # import cv2
-        # cv2.imwrite('/media/frigate/mask.png',mask_img)
-        # print(mask)
+        # image_array is now (3, H, W), convert to (H, W, 3)
+        if image_array.shape[0] == 3:
+            image_array = np.transpose(image_array, (1, 2, 0))
+        # Normalize to [0, 1]
+        image_array = image_array.astype(np.float32) / 255.0
+
+        # Resize to 320x320
+        image_resized = cv2.resize(image_array, (320, 320), interpolation=cv2.INTER_LINEAR)
+
+        # Convert back to (1, 3, 320, 320)
+        image_resized = np.transpose(image_resized, (2, 0, 1))[np.newaxis, ...]
+
+        input = self._scale_image(
+            image_array=image_resized,
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+        trt_outputs = self.infer(image=input)
+        # trt_outputs[0] is a flat array of shape (102400,), need to reshape to (320, 320)
+        mask = trt_outputs[0]
+        if mask.ndim == 1 and mask.size == 320 * 320:
+            mask = mask.reshape((320, 320))
+        else:
+            mask = np.squeeze(mask)
+            if mask.shape != (320, 320):
+                raise ValueError(f"Unexpected mask shape after squeeze: {mask.shape}")
+        # Resize mask back to input size (H, W)
+        h, w = tensor_input.shape[2], tensor_input.shape[3]
+        mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
+        mask = np.round(mask)
         return mask
     
     def _scale_image(self,image_array, mean, std):

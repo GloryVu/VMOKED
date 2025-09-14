@@ -2,69 +2,27 @@
 import os
 import time
 import logging
-import argparse
 import tensorrt as trt
-# import pycuda.driver as cuda
-# import pycuda.autoinit
 import numpy as np
 from cuda import cudart
 import ctypes
-from typing import Optional, List, Tuple
-# from skimage import io
-import cv2
-# from skimage.transform import resize
-import logging
-
-import ctypes
-import numpy as np
-
-try:
-    import experiments.model.OurModel.detector as trt
-    from cuda import cuda
-
-    TRT_SUPPORT = True
-except ModuleNotFoundError as e:
-    TRT_SUPPORT = False
-
+from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 DETECTOR_KEY = "objectdetection"
 
-if TRT_SUPPORT:
-
-    class TrtLogger(trt.ILogger):
-        def __init__(self):
-            trt.ILogger.__init__(self)
-
-        def log(self, severity, msg):
-            logger.log(self.getSeverity(severity), msg)
-
-        def getSeverity(self, sev: trt.ILogger.Severity) -> int:
-            if sev == trt.ILogger.VERBOSE:
-                return logging.DEBUG
-            elif sev == trt.ILogger.INFO:
-                return logging.INFO
-            elif sev == trt.ILogger.WARNING:
-                return logging.WARNING
-            elif sev == trt.ILogger.ERROR:
-                return logging.ERROR
-            elif sev == trt.ILogger.INTERNAL_ERROR:
-                return logging.CRITICAL
-            else:
-                return logging.DEBUG
-
-
 def cuda_call(call):
     err, res = call[0], call[1:]
+    if err != 0:
+        raise RuntimeError(f"CUDA call failed with error code {err}")
     if len(res) == 1:
-        res = res[0]
+        return res[0]
     return res
-
 
 class HostDeviceMem:
     """Pair of host and device memory, where the host memory is wrapped in a numpy array"""
-    def __init__(self, size: int, dtype: np.dtype, shape: Tuple[int, int, int]):
+    def __init__(self, size: int, dtype: np.dtype, shape: Tuple[int, ...]):
         nbytes = size * dtype.itemsize
         host_mem = cuda_call(cudart.cudaMallocHost(nbytes))
         pointer_type = ctypes.POINTER(np.ctypeslib.as_ctypes_type(dtype))
@@ -81,6 +39,7 @@ class HostDeviceMem:
             raise ValueError(
                 f"Tried to fit an array of size {arr.size} into host memory of size {self.host.size}"
             )
+        # Flatten and copy only as much as fits
         np.copyto(self.host[:arr.size], arr.flat, casting='safe')
     @property
     def device(self) -> int:
@@ -96,68 +55,77 @@ class HostDeviceMem:
         cuda_call(cudart.cudaFree(self.device))
         cuda_call(cudart.cudaFreeHost(self.host.ctypes.data))
 
-
 class TensorRtDetector:
     type_key = DETECTOR_KEY
-
-    trt_logger = trt.Logger()
 
     def __init__(self, detector):
         trt.init_libnvinfer_plugins(None, "")
         trt_path = detector
-        # print(trt_path)
-        if (not os.path.exists(trt_path)):
-            print("building engine from ", trt_path)
-            self.engine = self.build_engine_from_onnx(trt_path.replace('.trt','.onnx'),fp16=True)
-            with open(trt_path, "wb") as fw:
-                fw.write(self.engine.serialize())
-            print("saved engine to ", trt_path)
-        else:
-            print("reading ", trt_path)
+
+        # Determine if the path is an ONNX or TRT engine file
+        is_onnx = trt_path.endswith('.onnx')
+        is_trt = trt_path.endswith('.trt')
+
+        self.trt_logger = trt.Logger()
+
+        # If ONNX, always build engine and save as TRT
+        if is_onnx:
+            print("Building engine from ONNX:", trt_path)
+            engine = self.build_engine_from_onnx(trt_path, fp16=True)
+            if engine is None:
+                raise RuntimeError(f"Failed to build TensorRT engine from ONNX file: {trt_path}")
+            # Save engine to .trt file for future use
+            trt_save_path = trt_path.replace('.onnx', '.trt')
+            with open(trt_save_path, "wb") as fw:
+                fw.write(engine.serialize())
+            print("Saved engine to", trt_save_path)
+            self.engine = engine
+        elif is_trt and os.path.exists(trt_path):
+            print("Reading TensorRT engine from", trt_path)
             with open(trt_path, "rb") as f, trt.Runtime(self.trt_logger) as runtime:
                 self.engine = runtime.deserialize_cuda_engine(f.read())
+            if self.engine is None:
+                raise RuntimeError(f"Failed to deserialize TensorRT engine from file: {trt_path}")
+        else:
+            raise FileNotFoundError(f"Model file not found or unsupported extension: {trt_path}")
+
+        # Defensive: check engine is not None
+        if self.engine is None:
+            raise RuntimeError("TensorRT engine is None after initialization.")
+
         self.context = self.engine.create_execution_context()
         self.inputs, self.outputs, self.bindings, self.stream = self.allocate_buffers(self.engine)
 
-
-    # Allocates all buffers required for an engine, i.e. host/device inputs/outputs.
-    # If engine uses dynamic shapes, specify a profile to find the maximum input & output size.
     def allocate_buffers(self, engine: trt.ICudaEngine, profile_idx: Optional[int] = None):
         inputs = []
         outputs = []
         bindings = []
         stream = cuda_call(cudart.cudaStreamCreate())
-        tensor_names = [str(i) for i in self.engine]
+        tensor_names = [engine.get_binding_name(i) for i in range(engine.num_bindings)]
         for binding in tensor_names:
             # get_tensor_profile_shape returns (min_shape, optimal_shape, max_shape)
             # Pick out the max shape to allocate enough memory for the binding.
-            shape = engine.get_binding_shape(binding) if profile_idx is None else engine.get_binding_profile_shape(binding, profile_idx)[-1]
+            if profile_idx is None:
+                shape = engine.get_binding_shape(binding)
+            else:
+                shape = engine.get_profile_shape(profile_idx, binding)[2]
             shape_valid = np.all([s >= 0 for s in shape])
             if not shape_valid and profile_idx is None:
-                raise ValueError(f"Binding {binding} has dynamic shape, " +\
-                    "but no profile was specified.")
+                raise ValueError(f"Binding {binding} has dynamic shape, but no profile was specified.")
             size = trt.volume(shape)
             if engine.has_implicit_batch_dimension:
                 size *= engine.max_batch_size
             dtype = np.dtype(trt.nptype(engine.get_binding_dtype(binding)))
-            # dtype = np.dtype(np.float32)
-            # Allocate host and device buffers
             bindingMemory = HostDeviceMem(size, dtype, shape)
-
-            # Append the device buffer to device bindings.
             bindings.append(int(bindingMemory.device))
-
-            # Append to the appropriate list.
-            
             if engine.binding_is_input(binding):
                 inputs.append(bindingMemory)
             else:
                 outputs.append(bindingMemory)
         return inputs, outputs, bindings, stream
 
-
     def build_engine_from_onnx(self, onnx_file_path, fp16=False):
-        EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+        EXPLICIT_BATCH = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
         with trt.Builder(self.trt_logger) as builder, \
              builder.create_network(EXPLICIT_BATCH) as network, \
              builder.create_builder_config() as config, \
@@ -167,59 +135,76 @@ class TensorRtDetector:
             if fp16:
                 print("setting fp16 flag")
                 config.set_flag(trt.BuilderFlag.FP16)
-            # Parse model file
-            assert os.path.exists(onnx_file_path), f'cannot find {onnx_file_path}'
+            if not os.path.exists(onnx_file_path):
+                print(f'Cannot find ONNX file: {onnx_file_path}')
+                return None
             with open(onnx_file_path, 'rb') as fr:
                 if not parser.parse(fr.read()):
                     print('ERROR: Failed to parse the ONNX file.')
                     for error in range(parser.num_errors):
-                        print (parser.get_error(error))
-                    assert False
+                        print(parser.get_error(error))
+                    return None
             plan = builder.build_serialized_network(network, config)
+            if plan is None:
+                print("ERROR: Failed to build serialized TensorRT network from ONNX.")
+                return None
             engine = runtime.deserialize_cuda_engine(plan)
+            if engine is None:
+                print("ERROR: Failed to deserialize TensorRT engine from serialized plan.")
+                return None
             return engine
 
-
     def infer(self, image):
-        self.inputs[0].host = image
-        # Transfer input data to the GPU.
+        # Defensive: check input shape matches expected
+        input_arr = np.array(image)
+        expected_shape = self.inputs[0].host.shape
+        if input_arr.size > self.inputs[0].host.size:
+            raise ValueError(
+                f"Tried to fit an array of size {input_arr.size} into host memory of size {self.inputs[0].host.size}"
+            )
+        # Flatten and copy only as much as fits
+        np.copyto(self.inputs[0].host[:input_arr.size], input_arr.flat, casting='safe')
         host2device = cudart.cudaMemcpyKind.cudaMemcpyHostToDevice
-        [cuda_call(cudart.cudaMemcpyAsync(inp.device, inp.host, inp.nbytes, host2device, self.stream)) for inp in self.inputs]
-        # Run inference.
+        for inp in self.inputs:
+            cuda_call(cudart.cudaMemcpyAsync(inp.device, inp.host, inp.nbytes, host2device, self.stream))
         self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream)
-        # Transfer predictions back from the GPU.
         device2host = cudart.cudaMemcpyKind.cudaMemcpyDeviceToHost
-        [cuda_call(cudart.cudaMemcpyAsync(out.host, out.device, out.nbytes, device2host, self.stream)) for out in self.outputs]
-        # Synchronize the stream
+        for out in self.outputs:
+            cuda_call(cudart.cudaMemcpyAsync(out.host, out.device, out.nbytes, device2host, self.stream))
         cuda_call(cudart.cudaStreamSynchronize(self.stream))
-        # Return outputs
         return [out.host for out in self.outputs]
 
     def detect_raw(self, tensor_input):
-        # input = np.array(tensor_input)
-        input = np.array(tensor_input)#.astype(np.float16)
-        # input.ctypes.data_as(ctypes.POINTER(ctypes.c_int16))
-        trt_outputs = self.infer(image=input)
-        # print(trt_outputs)
-        num_dets = 100#int(trt_outputs[0])
+        input_arr = np.array(tensor_input)
+        # Defensive: check input shape matches expected
+        if input_arr.shape != tuple(self.inputs[0].shape):
+            # Try to reshape if possible, else raise
+            try:
+                input_arr = input_arr.reshape(self.inputs[0].shape)
+            except Exception as e:
+                raise ValueError(f"Input shape {input_arr.shape} does not match expected {self.inputs[0].shape}") from e
+        trt_outputs = self.infer(image=input_arr)
+        # Defensive: check output shapes
+        if len(trt_outputs) < 4:
+            raise RuntimeError("TensorRT model did not return enough outputs")
+        num_dets = min(100, len(trt_outputs[1]) // 4, len(trt_outputs[2]), len(trt_outputs[3]))
         det_boxes = []
-        h = input.shape[2]
-        w = input.shape[3]
-        # logger.info(f'h: {h} w: {w}')
+        h = input_arr.shape[2]
+        w = input_arr.shape[3]
         for box in range(num_dets):
             x0, y0, x1, y1 = map(round, trt_outputs[1][box*4:(box+1)*4])
-            det_boxes.append((x0*1.0/w, y0*1.0/h,x1*1.0/w,y1*1.0/h))
+            det_boxes.append((x0*1.0/w, y0*1.0/h, x1*1.0/w, y1*1.0/h))
         det_scores = trt_outputs[2][:num_dets]
         det_classes = trt_outputs[3][:num_dets]
 
         detections = np.zeros((20, 8), np.float32)
-        # logger.info(det_boxes)
+        det_idx = 0
         for i in range(num_dets):
-            if i == 20:
+            if det_idx == 20:
                 break
             if float(det_scores[i]) < 0.1:
                 continue
-            detections[i] = [
+            detections[det_idx] = [
                 det_classes[i],
                 float(det_scores[i]),
                 det_boxes[i][0],
@@ -229,5 +214,5 @@ class TensorRtDetector:
                 0.0,
                 0.0
             ]
-        # print(detections)
+            det_idx += 1
         return detections
